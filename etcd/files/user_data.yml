@@ -1,0 +1,28 @@
+#cloud-config
+
+coreos:
+  etcd2:
+    # generate a new token for each unique cluster
+    # from https://discovery.etcd.io/new?size=n where n = cluster size
+    # discovery url to bootstrap the cluster
+    discovery: https://discovery.etcd.io/${discovery_token}
+    # multi-region and multi-cloud deployments need to use $public_ipv4
+    # list of member’s client urls to advertise information to the rest of the cluster
+    advertise-client-urls: http://$private_ipv4:2379
+    # this address is used to communicate etcd data around the cluster
+    initial-advertise-peer-urls: http://$private_ipv4:2380
+    # listen on both the official ports and the legacy ports
+    # legacy ports can be omitted if your application doesn't depend on them
+    # url to listen for client traffic
+    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+    # url to listen for peer traffic
+    listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
+  fleet:
+    public-ip: $public_ipv4
+  flannel:
+    interface: $public_ipv4
+  units:
+    - name: etcd2.service
+      command: start
+    - name: fleet.service
+      command: start
