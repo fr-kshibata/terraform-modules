@@ -24,5 +24,3 @@ variable "ssh_key_name" {}
 variable "cluster_size" {
   default = "3"
 }
-
-variable "discovery_token" {}

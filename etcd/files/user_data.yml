@@ -2,10 +2,6 @@
 
 coreos:
   etcd2:
-    # generate a new token for each unique cluster
-    # from https://discovery.etcd.io/new?size=n where n = cluster size
-    # discovery url to bootstrap the cluster
-    discovery: https://discovery.etcd.io/${discovery_token}
     # multi-region and multi-cloud deployments need to use $public_ipv4
     # list of member’s client urls to advertise information to the rest of the cluster
     advertise-client-urls: http://$private_ipv4:2379
@@ -22,7 +18,24 @@ coreos:
   flannel:
     interface: $public_ipv4
   units:
-    - name: etcd2.service
-      command: start
     - name: fleet.service
       command: start
+    - command: stop
+      name: etcd2.service
+    - name: etcd-peers.service
+      command: start
+      content: |
+        [Unit]
+        Description=Write a file with the etcd peers that we should bootstrap to
+        [Service]
+        Restart=on-failure
+        RestartSec=10
+        ExecStartPre=/usr/bin/docker pull monsantoco/etcd-aws-cluster:latest
+        ExecStartPre=/usr/bin/docker run --rm=true -v /etc/sysconfig/:/etc/sysconfig/ monsantoco/etcd-aws-cluster:latest
+        ExecStart=/usr/bin/systemctl start etcd2
+write_files:
+  - content: |
+      [Service]
+      EnvironmentFile=/etc/sysconfig/etcd-peers
+    path: /etc/systemd/system/etcd2.service.d/30-etcd_peers.conf
+    permissions: 420

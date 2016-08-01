@@ -4,6 +4,7 @@ resource "aws_launch_configuration" "cluster" {
   key_name                    = "${var.ssh_key_name}"
   enable_monitoring           = true
   security_groups             = ["${aws_security_group.cluster.id}"]
+  iam_instance_profile        = "${aws_iam_instance_profile.etcd_iam_profile.name}"
 
   root_block_device {
     volume_type             = "gp2"
@@ -18,8 +19,8 @@ resource "aws_launch_configuration" "cluster" {
   }
 }
 
-resource "aws_autoscaling_group" "etd" {
-  name                      = "${var.cluster_name}-etcd"
+resource "aws_autoscaling_group" "etcd" {
+  name                      = "${var.cluster_name}"
   availability_zones        = ["${var.aws_availability_zones}"]
   vpc_zone_identifier       = ["${var.subnets}"]
 
@@ -74,7 +75,8 @@ resource "template_file" "userdata" {
   template = "${file("${path.module}/files/user_data.yml")}"
 
   vars {
-    discovery_token = "${var.discovery_token}"
+    asg_name = "${var.cluster_name}"
+    #asg_name = "${aws_autoscaling_group.etcd.name}"
   }
 
   lifecycle {

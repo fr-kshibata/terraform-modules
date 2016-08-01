@@ -5,7 +5,7 @@ provider "aws" {
    region = "${var.aws_region}"
 }
 
-/*resource "terraform_remote_state" "network" {
+data "terraform_remote_state" "network" {
     backend = "s3"
     config {
         bucket      = "${var.remote_state_bucket}"
@@ -13,8 +13,7 @@ provider "aws" {
         region      = "eu-central-1"
         profile     = "newprod"
      }
-}*/
-
+}
 
 module "etcd" {
    source = "../../etcd"
@@ -27,17 +26,14 @@ module "etcd" {
     aws_region             = "${var.aws_region}"
     aws_availability_zones = ["${var.aws_availability_zones}"]
 
-    #vpc_id     = "${terraform_remote_state.network.output.vpc_id}"
-    vpc_id      = "vpc-148f8c7d"
-    cidr_block  = "${var.cidr_block}"
-    subnets     = ["subnet-b4857bdc", "subnet-27a2ab5c"]
-    #subnets    = ["${terraform_remote_state.network.output.internal_subnets}"]
+    vpc_id     = "${data.terraform_remote_state.network.vpc_id}"
+    cidr_block  = "${data.terraform_remote_state.network.cidr_block}"
+    subnets    = ["${data.terraform_remote_state.network.internal_subnets}"]
 
     ssh_key_name = "${var.env_name}"
 
     instance_type    = "${var.instance_type}"
     image_id         = "${var.image_id}"
 
-    discovery_token  = "${var.discovery_token}"
+    cluster_size = 5
 }
-

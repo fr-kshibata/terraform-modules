@@ -14,5 +14,3 @@ variable "image_id" {}
 variable "instance_type" {}
 
 variable "remote_state_bucket" {}
-
-variable "discovery_token" {}
