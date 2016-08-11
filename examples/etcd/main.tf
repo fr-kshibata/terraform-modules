@@ -27,7 +27,7 @@ module "etcd" {
     aws_availability_zones = ["${var.aws_availability_zones}"]
 
     vpc_id     = "${data.terraform_remote_state.network.vpc_id}"
-    cidr_block  = "${data.terraform_remote_state.network.cidr_block}"
+    cidr_block = "${data.terraform_remote_state.network.cidr_block}"
     subnets    = ["${data.terraform_remote_state.network.internal_subnets}"]
 
     ssh_key_name = "${var.env_name}"
@@ -35,5 +35,12 @@ module "etcd" {
     instance_type    = "${var.instance_type}"
     image_id         = "${var.image_id}"
 
-    cluster_size = 5
+    cluster_size = 3
+}
+output "etcd_security_group" {
+   value = "${module.etcd.cluster_security_group}"
+}
+
+output "etcd_dns_name" {
+   value = "${module.etcd.elb_dns_name}"
 }
