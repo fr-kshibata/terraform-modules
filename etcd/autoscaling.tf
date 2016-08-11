@@ -72,11 +72,10 @@ resource "aws_autoscaling_group" "etcd" {
 }
 
 resource "template_file" "userdata" {
-  template = "${file("${path.module}/files/user_data.yml")}"
+  template = "${file("${path.module}/user_data.yml")}"
 
   vars {
     asg_name = "${var.cluster_name}"
-    #asg_name = "${aws_autoscaling_group.etcd.name}"
   }
 
   lifecycle {

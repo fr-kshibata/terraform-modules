@@ -1,3 +1,7 @@
+output "cluster_security_group" {
+  value = "${aws_security_group.cluster.id}"
+}
+
 output "elb_security_group" {
   value = "${aws_security_group.elb.id}"
 }
