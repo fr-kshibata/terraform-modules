@@ -1,0 +1,136 @@
+#cloud-config
+
+coreos:
+  etcd2:
+    proxy: on
+    listen-client-urls: http://127.0.0.1:2379
+  fleet:
+    metadata: "role=node"
+    etcd_servers: "http://127.0.0.1:2379"
+  units:
+    - name: fleet.service
+      command: start
+    - name: etcd2.service
+      command: stop
+    - name: etcd-peers.service
+      command: start
+      content: |
+        [Unit]
+        Description=Write a file with the etcd peers that we should bootstrap to
+        Before=etcd2.service
+        [Service]
+        Restart=on-failure
+        RestartSec=10
+        ExecStartPre=/usr/bin/docker pull monsantoco/etcd-aws-cluster:latest
+        ExecStartPre=/usr/bin/docker run --rm=true -e PROXY_ASG="etcd" -v /etc/sysconfig/:/etc/sysconfig/ monsantoco/etcd-aws-cluster:latest
+        ExecStart=/usr/bin/systemctl start etcd2
+    - name: calico-node.service
+      runtime: true
+      command: start
+      content: |
+        [Unit]
+        Description=calicoctl node
+        After=docker.service
+        Requires=docker.service
+        [Service]
+        User=root
+        Environment=ETCD_AUTHORITY=${etcd_dns_name}:2379
+        PermissionsStartOnly=true
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
+        ExecStart=/opt/bin/calicoctl node --ip=$private_ipv4 --detach=false
+        Restart=always
+        RestartSec=10
+        [Install]
+        WantedBy=multi-user.target
+    - name: kubelet.service
+      runtime: true
+      command: start
+      content: |
+        [Unit]
+        Description=Kubernetes Kubelet
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=docker.service
+        Requires=docker.service
+        [Service]
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/${K8S_VER}/bin/linux/amd64/kubelet
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
+        ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
+        ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
+        ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam
+        ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico-ipam
+        ExecStart=/opt/bin/kubelet \
+        --address=0.0.0.0 \
+        --allow-privileged=true \
+        --cluster-dns=10.100.0.10 \
+        --cluster-domain=cluster.local \
+        --config=/etc/kubernetes/manifests \
+        --hostname-override=$private_ipv4 \
+        --api-servers=http://${master_dns_name}:8080 \
+        --network-plugin-dir=/etc/cni/net.d \
+        --network-plugin=cni \
+        --logtostderr=true
+        Restart=always
+        RestartSec=10
+        [Install]
+        WantedBy=multi-user.target
+    - name: kube-proxy.service
+      command: start
+      content: |
+        [Unit]
+        Description=Kubernetes Proxy
+        Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+        Requires=kubelet.service
+        After=kubelet.service
+        [Service]
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/${K8S_VER}/bin/linux/amd64/kube-proxy
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
+        ExecStart=/opt/bin/kube-proxy \
+        --master=http://${master_dns_name}:8080 \
+        --proxy-mode=iptables \
+        --logtostderr=true
+        Restart=always
+        RestartSec=10
+write_files:
+  - path: /etc/systemd/system/etcd2.service.d/30-etcd_peers.conf
+    permissions: 420
+    content: |
+      [Service]
+      EnvironmentFile=/etc/sysconfig/etcd-peers
+  # Network config file for the Calico CNI plugin.
+  - path: /etc/cni/net.d/10-calico.conf
+    owner: root
+    permissions: 0755
+    content: |
+      {
+          "name": "calico-k8s-network",
+          "type": "calico",
+          "etcd_authority": "${etcd_dns_name}:2379",
+          "log_level": "info",
+          "ipam": {
+              "type": "calico-ipam"
+          },
+          "policy": {
+              "type": "k8s",
+              "k8s_api_root": "http://${master_dns_name}:8080/api/v1/"
+          }
+      }
+  # Kubeconfig file.
+  - path: /etc/kubernetes/worker-kubeconfig.yaml
+    owner: root
+    permissions: 0755
+    content: |
+      apiVersion: v1
+      kind: Config
+      clusters:
+      - name: local
+        cluster:
+          server: http://${master_dns_name}:8080
+      users:
+      - name: kubelet
+      contexts:
+      - context:
+          cluster: local
+          user: kubelet
+        name: kubelet-context
+      current-context: kubelet-context
